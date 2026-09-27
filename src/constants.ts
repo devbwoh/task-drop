@@ -1,10 +1,4 @@
-import type { ColumnDef, Priority } from './types';
-
-export const COLUMNS: ColumnDef[] = [
-  { id: 'todo', title: 'To Do', accent: '#6366f1' },
-  { id: 'inprogress', title: 'In Progress', accent: '#f59e0b' },
-  { id: 'done', title: 'Done', accent: '#22c55e' },
-];
+import type { Priority } from './types';
 
 export const PRIORITY_META: Record<
   Priority,
@@ -27,4 +21,4 @@ export const PRIORITY_META: Record<
   },
 };
 
-export const STORAGE_KEY = 'kanban.board.v1';
+export const STORAGE_KEY = 'kanban.board.v2';

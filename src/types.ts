@@ -8,13 +8,12 @@ export interface Task {
   createdAt: number;
 }
 
-export type ColumnId = 'todo' | 'inprogress' | 'done';
-
 export interface ColumnDef {
-  id: ColumnId;
+  id: string;
   title: string;
-  accent: string;
 }
 
-/** The board state is a map of column id -> ordered task ids. */
-export type BoardState = Record<ColumnId, Task[]>;
+export interface BoardState {
+  columns: ColumnDef[];
+  tasksByColumn: Record<string, Task[]>;
+}

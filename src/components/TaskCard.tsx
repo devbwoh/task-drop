@@ -12,7 +12,7 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id });
+    useSortable({ id: task.id, data: { type: 'task' } });
 
   const style = {
     transform: CSS.Transform.toString(transform),

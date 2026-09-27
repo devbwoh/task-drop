@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { BoardState, ColumnId, Priority, Task } from '../types';
-import { COLUMNS, STORAGE_KEY } from '../constants';
+import type { BoardState, ColumnDef, Priority, Task } from '../types';
+import { STORAGE_KEY } from '../constants';
 import { SEED_BOARD } from '../seed';
 
 function loadBoard(): BoardState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return SEED_BOARD;
-    const parsed = JSON.parse(raw) as Partial<Record<ColumnId, Task[]>>;
-    // Ensure every column exists even if the stored shape is stale.
-    const board: BoardState = { todo: [], inprogress: [], done: [] };
-    for (const col of COLUMNS) {
-      const tasks = parsed[col.id];
-      if (Array.isArray(tasks)) board[col.id] = tasks;
+    const parsed = JSON.parse(raw) as Partial<BoardState>;
+    if (!Array.isArray(parsed.columns) || typeof parsed.tasksByColumn !== 'object') {
+      return SEED_BOARD;
     }
-    return board;
+    const columns: ColumnDef[] = parsed.columns.filter(
+      (c): c is ColumnDef => !!c && typeof c.id === 'string' && typeof c.title === 'string',
+    );
+    const tasksByColumn: Record<string, Task[]> = {};
+    for (const col of columns) {
+      const tasks = parsed.tasksByColumn[col.id];
+      tasksByColumn[col.id] = Array.isArray(tasks) ? tasks : [];
+    }
+    return { columns, tasksByColumn };
   } catch {
     return SEED_BOARD;
   }
@@ -33,11 +38,11 @@ export function useBoard() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
     } catch {
-      // Ignore quota / serialization errors so the UI keeps working.
+      // Ignore quota / serialization errors.
     }
   }, [board]);
 
-  const addTask = useCallback((columnId: ColumnId, input: NewTaskInput) => {
+  const addTask = useCallback((columnId: string, input: NewTaskInput) => {
     const task: Task = {
       id: crypto.randomUUID(),
       title: input.title.trim() || 'Untitled task',
@@ -45,15 +50,21 @@ export function useBoard() {
       priority: input.priority,
       createdAt: Date.now(),
     };
-    setBoard((prev) => ({ ...prev, [columnId]: [task, ...prev[columnId]] }));
+    setBoard((prev) => ({
+      ...prev,
+      tasksByColumn: {
+        ...prev.tasksByColumn,
+        [columnId]: [task, ...(prev.tasksByColumn[columnId] ?? [])],
+      },
+    }));
   }, []);
 
   const updateTask = useCallback(
     (taskId: string, input: NewTaskInput) => {
       setBoard((prev) => {
-        const next = {} as BoardState;
-        for (const col of COLUMNS) {
-          next[col.id] = prev[col.id].map((t) =>
+        const nextTasks: Record<string, Task[]> = {};
+        for (const col of prev.columns) {
+          nextTasks[col.id] = (prev.tasksByColumn[col.id] ?? []).map((t) =>
             t.id === taskId
               ? {
                   ...t,
@@ -64,7 +75,7 @@ export function useBoard() {
               : t,
           );
         }
-        return next;
+        return { ...prev, tasksByColumn: nextTasks };
       });
     },
     [],
@@ -72,21 +83,20 @@ export function useBoard() {
 
   const deleteTask = useCallback((taskId: string) => {
     setBoard((prev) => {
-      const next = {} as BoardState;
-      for (const col of COLUMNS) {
-        next[col.id] = prev[col.id].filter((t) => t.id !== taskId);
+      const nextTasks: Record<string, Task[]> = {};
+      for (const col of prev.columns) {
+        nextTasks[col.id] = (prev.tasksByColumn[col.id] ?? []).filter((t) => t.id !== taskId);
       }
-      return next;
+      return { ...prev, tasksByColumn: nextTasks };
     });
   }, []);
 
-  /** Move a task to `toColumn` at the given index, removing it from its old column. */
   const moveTask = useCallback(
-    (taskId: string, toColumn: ColumnId, toIndex: number) => {
+    (taskId: string, toColumnId: string, toIndex: number) => {
       setBoard((prev) => {
         let moving: Task | undefined;
-        for (const col of COLUMNS) {
-          const found = prev[col.id].find((t) => t.id === taskId);
+        for (const col of prev.columns) {
+          const found = (prev.tasksByColumn[col.id] ?? []).find((t) => t.id === taskId);
           if (found) {
             moving = found;
             break;
@@ -94,16 +104,50 @@ export function useBoard() {
         }
         if (!moving) return prev;
 
-        const next = {} as BoardState;
-        for (const col of COLUMNS) {
-          // Remove the task from wherever it currently lives.
-          next[col.id] = prev[col.id].filter((t) => t.id !== taskId);
+        const nextTasks: Record<string, Task[]> = {};
+        for (const col of prev.columns) {
+          nextTasks[col.id] = (prev.tasksByColumn[col.id] ?? []).filter((t) => t.id !== taskId);
         }
-        const target = [...next[toColumn]];
+        const target = [...(nextTasks[toColumnId] ?? [])];
         const clamped = Math.max(0, Math.min(toIndex, target.length));
         target.splice(clamped, 0, moving);
-        next[toColumn] = target;
-        return next;
+        nextTasks[toColumnId] = target;
+        return { ...prev, tasksByColumn: nextTasks };
+      });
+    },
+    [],
+  );
+
+  const addColumn = useCallback((title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const newCol: ColumnDef = { id: crypto.randomUUID(), title: trimmed };
+    setBoard((prev) => ({
+      columns: [...prev.columns, newCol],
+      tasksByColumn: { ...prev.tasksByColumn, [newCol.id]: [] },
+    }));
+  }, []);
+
+  const deleteColumn = useCallback((columnId: string) => {
+    setBoard((prev) => {
+      if (prev.columns.length <= 1) return prev;
+      const columns = prev.columns.filter((c) => c.id !== columnId);
+      const nextTasks = { ...prev.tasksByColumn };
+      delete nextTasks[columnId];
+      return { columns, tasksByColumn: nextTasks };
+    });
+  }, []);
+
+  const reorderColumns = useCallback(
+    (activeId: string, overId: string) => {
+      setBoard((prev) => {
+        const oldIndex = prev.columns.findIndex((c) => c.id === activeId);
+        const newIndex = prev.columns.findIndex((c) => c.id === overId);
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
+        const columns = [...prev.columns];
+        const [removed] = columns.splice(oldIndex, 1);
+        columns.splice(newIndex, 0, removed);
+        return { ...prev, columns };
       });
     },
     [],
@@ -113,5 +157,15 @@ export function useBoard() {
     setBoard(SEED_BOARD);
   }, []);
 
-  return { board, addTask, updateTask, deleteTask, moveTask, resetBoard };
+  return {
+    board,
+    addTask,
+    updateTask,
+    deleteTask,
+    moveTask,
+    addColumn,
+    deleteColumn,
+    reorderColumns,
+    resetBoard,
+  };
 }

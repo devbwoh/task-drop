@@ -9,9 +9,8 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import type { ColumnId, Task } from './types';
-import { COLUMNS } from './constants';
+import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import type { Task } from './types';
 import { useBoard } from './hooks/useBoard';
 import type { NewTaskInput } from './hooks/useBoard';
 import { Column } from './components/Column';
@@ -21,48 +20,68 @@ import { TaskModal } from './components/TaskModal';
 interface ModalState {
   open: boolean;
   mode: 'create' | 'edit';
-  columnId?: ColumnId;
+  columnId?: string;
   task?: Task | null;
 }
 
 export default function App() {
-  const { board, addTask, updateTask, deleteTask, moveTask, resetBoard } = useBoard();
+  const { board, addTask, updateTask, deleteTask, moveTask, addColumn, deleteColumn, reorderColumns, resetBoard } = useBoard();
   const [modal, setModal] = useState<ModalState>({ open: false, mode: 'create' });
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [addingColumn, setAddingColumn] = useState(false);
+  const [newColTitle, setNewColTitle] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // A flat lookup of every task by id for the drag overlay.
+  // Flat lookup of every task by id for the drag overlay.
   const allTasks = useMemo(() => {
     const map = new Map<string, Task>();
-    for (const col of COLUMNS) for (const t of board[col.id]) map.set(t.id, t);
+    for (const col of board.columns) {
+      for (const t of board.tasksByColumn[col.id] ?? []) map.set(t.id, t);
+    }
     return map;
   }, [board]);
 
   const activeTask = activeId ? allTasks.get(activeId) : undefined;
+  const isDraggingColumn = activeId !== null && !allTasks.has(activeId);
 
-  function findColumnOf(taskId: string): ColumnId | null {
-    for (const col of COLUMNS) if (board[col.id].some((t) => t.id === taskId)) return col.id;
+  function findColumnOf(taskId: string): string | null {
+    for (const col of board.columns) {
+      if ((board.tasksByColumn[col.id] ?? []).some((t) => t.id === taskId)) return col.id;
+    }
     return null;
+  }
+
+  function resolveTargetColumn(overId: string): string | null {
+    // Direct column id (hovering over header or empty area via sortable)
+    if (board.columns.some((c) => c.id === overId)) return overId;
+    // Droppable body of a column
+    if (overId.startsWith('drop-')) return overId.slice(5);
+    // A task id — find its parent column
+    return findColumnOf(overId);
   }
 
   function handleDragStart(e: DragStartEvent) {
     setActiveId(String(e.active.id));
   }
 
-  // Reorder within a column while hovering, for smooth live feedback.
   function handleDragOver(e: DragOverEvent) {
     const { active, over } = e;
     if (!over) return;
-    const activeCol = findColumnOf(String(active.id));
-    const overCol = findColumnOf(String(over.id)) ?? (String(over.id) as ColumnId);
-    if (!activeCol || !overCol || activeCol === overCol) return;
 
-    // Moving across columns: place at the end of the target column.
-    moveTask(String(active.id), overCol, board[overCol].length);
+    const activeType = (active.data.current as Record<string, string> | undefined)?.type;
+    if (activeType === 'column') return; // Column reordering handled on dragEnd only.
+
+    // Task dragging: move across columns live for smooth feedback.
+    const fromCol = findColumnOf(String(active.id));
+    const toCol = resolveTargetColumn(String(over.id));
+    if (!fromCol || !toCol || fromCol === toCol) return;
+
+    const targetTasks = board.tasksByColumn[toCol] ?? [];
+    moveTask(String(active.id), toCol, targetTasks.length);
   }
 
   function handleDragEnd(e: DragEndEvent) {
@@ -70,26 +89,42 @@ export default function App() {
     setActiveId(null);
     if (!over) return;
 
+    const activeType = (active.data.current as Record<string, string> | undefined)?.type;
     const activeIdStr = String(active.id);
+    const overIdStr = String(over.id);
+
+    // Column reordering — resolve target column in case over.id is a task or drop-zone id
+    if (activeType === 'column') {
+      const targetCol = resolveTargetColumn(overIdStr);
+      if (!targetCol || targetCol === activeIdStr) return;
+      reorderColumns(activeIdStr, targetCol);
+      return;
+    }
+
+    // Task movement
     const fromCol = findColumnOf(activeIdStr);
-    const toCol = findColumnOf(String(over.id)) ?? (String(over.id) as ColumnId);
+    const toCol = resolveTargetColumn(overIdStr);
     if (!fromCol || !toCol) return;
 
     if (fromCol === toCol) {
-      const items = board[toCol];
+      const items = board.tasksByColumn[toCol] ?? [];
       const oldIndex = items.findIndex((t) => t.id === activeIdStr);
-      const newIndex = items.findIndex((t) => t.id === String(over.id));
+      const newIndex = items.findIndex((t) => t.id === overIdStr);
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        moveTask(activeIdStr, toCol, arrayMove(items.map((t) => t.id), oldIndex, newIndex).indexOf(activeIdStr));
+        const reordered = [...items];
+        const [removed] = reordered.splice(oldIndex, 1);
+        reordered.splice(newIndex, 0, removed);
+        moveTask(activeIdStr, toCol, reordered.findIndex((t) => t.id === activeIdStr));
       }
     } else {
-      const items = board[toCol];
-      const overIndex = items.findIndex((t) => t.id === String(over.id));
-      moveTask(activeIdStr, toCol, overIndex === -1 ? items.length : overIndex);
+      // Cross-column: if over is a task, insert at that position; otherwise append.
+      const targetTasks = board.tasksByColumn[toCol] ?? [];
+      const overIndex = targetTasks.findIndex((t) => t.id === overIdStr);
+      moveTask(activeIdStr, toCol, overIndex === -1 ? targetTasks.length : overIndex);
     }
   }
 
-  function openCreate(columnId: ColumnId) {
+  function openCreate(columnId: string) {
     setModal({ open: true, mode: 'create', columnId });
   }
 
@@ -106,7 +141,13 @@ export default function App() {
     setModal({ open: false, mode: 'create' });
   }
 
-  const totalTasks = COLUMNS.reduce((n, c) => n + board[c.id].length, 0);
+  function handleAddColumn() {
+    addColumn(newColTitle);
+    setNewColTitle('');
+    setAddingColumn(false);
+  }
+
+  const totalTasks = board.columns.reduce((n, c) => n + (board.tasksByColumn[c.id]?.length ?? 0), 0);
 
   return (
     <div className="flex h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 text-slate-900">
@@ -125,7 +166,7 @@ export default function App() {
                 Flowboard
               </h1>
               <p className="hidden text-xs text-slate-400 sm:block">
-                {totalTasks} task{totalTasks === 1 ? '' : 's'} across {COLUMNS.length} columns
+                {totalTasks} task{totalTasks === 1 ? '' : 's'} across {board.columns.length} columns
               </p>
             </div>
           </div>
@@ -154,23 +195,83 @@ export default function App() {
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveId(null)}
         >
-          <div className="mx-auto flex h-full max-w-[1600px] gap-5 px-5 py-6 sm:px-8">
-            {COLUMNS.map((col) => (
-              <Column
-                key={col.id}
-                column={col}
-                tasks={board[col.id]}
-                onEdit={openEdit}
-                onDelete={deleteTask}
-                onAddClick={() => openCreate(col.id)}
-              />
-            ))}
-          </div>
+          <SortableContext items={board.columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+            <div className="mx-auto flex h-full max-w-[1600px] gap-5 px-5 py-6 sm:px-8">
+              {board.columns.map((col) => (
+                <Column
+                  key={col.id}
+                  column={col}
+                  tasks={board.tasksByColumn[col.id] ?? []}
+                  onEdit={openEdit}
+                  onDelete={deleteTask}
+                  onAddClick={() => openCreate(col.id)}
+                  onDeleteColumn={deleteColumn}
+                />
+              ))}
+
+              {/* Add Column */}
+              {addingColumn ? (
+                <div className="flex w-[280px] shrink-0 flex-col gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newColTitle}
+                    onChange={(e) => setNewColTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddColumn();
+                      if (e.key === 'Escape') {
+                        setAddingColumn(false);
+                        setNewColTitle('');
+                      }
+                    }}
+                    placeholder="Column name…"
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm outline-none ring-indigo-200 transition focus:ring-2"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddColumn}
+                      disabled={!newColTitle.trim()}
+                      className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddingColumn(false);
+                        setNewColTitle('');
+                      }}
+                      className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingColumn(true)}
+                  className="flex w-[280px] shrink-0 items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-400 transition-colors hover:border-indigo-300 hover:bg-indigo-50/30 hover:text-indigo-600"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Add Column
+                </button>
+              )}
+            </div>
+          </SortableContext>
 
           <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
             {activeTask ? (
               <div className="pointer-events-none">
                 <TaskCard task={activeTask} onEdit={() => {}} onDelete={() => {}} />
+              </div>
+            ) : isDraggingColumn ? (
+              <div className="pointer-events-none flex h-16 w-[320px] items-center justify-center rounded-2xl border-2 border-dashed border-indigo-300 bg-white/80 text-sm font-medium text-indigo-500 shadow-lg backdrop-blur">
+                Moving column…
               </div>
             ) : null}
           </DragOverlay>
@@ -180,7 +281,7 @@ export default function App() {
       <TaskModal
         open={modal.open}
         mode={modal.mode}
-        columnTitle={COLUMNS.find((c) => c.id === modal.columnId)?.title}
+        columnTitle={board.columns.find((c) => c.id === modal.columnId)?.title}
         task={modal.task}
         onClose={() => setModal({ open: false, mode: 'create' })}
         onSubmit={handleSubmit}
