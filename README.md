@@ -1,32 +1,55 @@
-# React + TypeScript + Vite
+# Task Drop Board
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+[![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-Live_Demo-3178C6?style=for-the-badge&logo=github&logoColor=white)](https://devbwoh.github.io/task-drop/)
 
-Currently, two official plugins are available:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> **Drag, Drop, Done.**  
+> Lightweight kanban board for organizing tasks.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the Oxlint configuration
+- **Drag & Drop**: Move tasks between columns or reorder them within a column. Columns themselves are also draggable to rearrange the board layout.
+- **Task Management**: Create, edit, and delete task cards with title, description, priority, and due date.
+- **Column Management**: Add, rename, or delete columns dynamically.
+- **Card Search**: Filter tasks across all columns by keyword in real time.
+- **Board Reset**: One-click restore to the default layout.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+---
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## AI Configuration
+
+- **VS code Extension**: Kilo code
+- **Local AI Engine**: LM Studio
+- **Model**: Qwen3.8 27B 
+
+---
+
+## Tech Stack
+
+| Layer | Tool |
+|-------|------|
+| Framework | React 19 (TypeScript) |
+| Build | Vite |
+| Package Manager | pnpm |
+| Drag & Drop | `@dnd-kit/core` + `@dnd-kit/sortable` |
+| Styling | Tailwind CSS v4 |
+
+---
+
+## Getting Started
+
+```bash
+pnpm install
+pnpm dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open the printed local URL in your browser.
+
+### Production Build
+
+```bash
+pnpm build
+pnpm preview
+```
