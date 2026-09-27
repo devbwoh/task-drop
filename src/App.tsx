@@ -5,10 +5,11 @@ import {
   PointerSensor,
   KeyboardSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import type { CollisionDetection, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Task } from './types';
 import { useBoard } from './hooks/useBoard';
@@ -23,6 +24,23 @@ interface ModalState {
   columnId?: string;
   task?: Task | null;
 }
+
+const boardCollisionDetection: CollisionDetection = (args) => {
+  const activeType = args.active.data.current?.type;
+  if (activeType === 'column') {
+    return closestCorners({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        (container) => container.id !== args.active.id && container.data.current?.type === 'column',
+      ),
+    });
+  }
+  // Task dragging: pointerWithin ensures the column under the cursor is detected
+  // even when it has zero tasks (no task corners to compete in closestCorners).
+  const pointerResult = pointerWithin(args);
+  if (pointerResult.length > 0) return pointerResult;
+  return closestCorners(args);
+};
 
 export default function App() {
   const { board, addTask, updateTask, deleteTask, moveTask, addColumn, deleteColumn, reorderColumns, resetBoard } = useBoard();
@@ -189,7 +207,7 @@ export default function App() {
       <main className="flex-1 overflow-x-auto overflow-y-hidden">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={boardCollisionDetection}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}

@@ -88,7 +88,7 @@ export function Column({ column, tasks, onEdit, onDelete, onAddClick, onDeleteCo
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div
           ref={setDroppableRef}
-          className={`flex min-h-[200px] flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border p-3 transition-colors duration-200 ${
+          className={`flex h-full min-h-[calc(100vh-250px)] flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border p-3 transition-colors duration-200 ${
             isOver
               ? 'border-indigo-300 bg-indigo-50/60 ring-2 ring-inset ring-indigo-200'
               : 'border-slate-200/70 bg-slate-100/40'
