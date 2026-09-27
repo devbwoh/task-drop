@@ -202,10 +202,10 @@ export default function App() {
       <header className="relative z-40 shrink-0 border-b border-slate-200/70 bg-white/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
           <div className="flex items-center gap-3">
-            <img src="/favicon.svg" alt="Flowboard logo" className="h-9 w-9 rounded-xl shadow-md shadow-indigo-200" />
+            <img src="/favicon.svg" alt="Task Drop Board logo" className="h-9 w-9" />
             <div>
               <h1 className="text-base font-bold leading-tight tracking-tight text-slate-800">
-                Flowboard
+                Task Drop Board
               </h1>
               <p className="hidden text-xs text-slate-400 sm:block">
                 {totalTasks} task{totalTasks === 1 ? '' : 's'} across {board.columns.length} columns
