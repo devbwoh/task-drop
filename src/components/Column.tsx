@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -10,10 +11,11 @@ interface ColumnProps {
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
   onAddClick: () => void;
+  onRenameColumn: (columnId: string, title: string) => void;
   onDeleteColumn: (columnId: string) => void;
 }
 
-export function Column({ column, tasks, onEdit, onDelete, onAddClick, onDeleteColumn }: ColumnProps) {
+export function Column({ column, tasks, onEdit, onDelete, onAddClick, onRenameColumn, onDeleteColumn }: ColumnProps) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({
     id: column.id,
     data: { type: 'column' },
@@ -28,6 +30,33 @@ export function Column({ column, tasks, onEdit, onDelete, onAddClick, onDeleteCo
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(column.title);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingTitle) {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }
+  }, [editingTitle]);
+
+  function startRename() {
+    setTitleDraft(column.title);
+    setEditingTitle(true);
+  }
+
+  function commitRename() {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== column.title) onRenameColumn(column.id, trimmed);
+    setEditingTitle(false);
+  }
+
+  function cancelRename() {
+    setTitleDraft(column.title);
+    setEditingTitle(false);
+  }
 
   return (
     <section
@@ -45,9 +74,34 @@ export function Column({ column, tasks, onEdit, onDelete, onAddClick, onDeleteCo
       >
         <div className="flex items-center gap-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-indigo-400" />
-          <h2 className="text-sm font-semibold tracking-wide text-slate-700">
-            {column.title}
-          </h2>
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // Keep keystrokes from reaching the sortable keyboard sensor,
+                // which would otherwise start a column drag on Enter/Space.
+                e.stopPropagation();
+                if (e.key === 'Enter') commitRename();
+                else if (e.key === 'Escape') cancelRename();
+              }}
+              onBlur={commitRename}
+              className="w-40 rounded-lg border border-indigo-300 bg-white px-2 py-1 text-sm font-semibold tracking-wide text-slate-700 shadow-sm outline-none ring-2 ring-indigo-100"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={startRename}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Rename column"
+              className="max-w-[180px] truncate rounded-md px-1 py-0.5 text-left text-sm font-semibold tracking-wide text-slate-700 transition-colors hover:bg-white hover:text-indigo-600 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+            >
+              {column.title}
+            </button>
+          )}
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-500">
             {tasks.length}
           </span>

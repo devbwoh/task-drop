@@ -44,7 +44,7 @@ const boardCollisionDetection: CollisionDetection = (args) => {
 };
 
 export default function App() {
-  const { board, addTask, updateTask, deleteTask, moveTask, addColumn, deleteColumn, reorderColumns, resetBoard } = useBoard();
+  const { board, addTask, updateTask, deleteTask, moveTask, addColumn, updateColumn, deleteColumn, reorderColumns, resetBoard } = useBoard();
   const [modal, setModal] = useState<ModalState>({ open: false, mode: 'create' });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [addingColumn, setAddingColumn] = useState(false);
@@ -314,6 +314,7 @@ export default function App() {
                   onEdit={openEdit}
                   onDelete={requestDeleteTask}
                   onAddClick={() => openCreate(col.id)}
+                  onRenameColumn={updateColumn}
                   onDeleteColumn={requestDeleteColumn}
                 />
               ))}

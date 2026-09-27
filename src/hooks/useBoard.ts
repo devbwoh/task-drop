@@ -128,6 +128,15 @@ export function useBoard() {
     }));
   }, []);
 
+  const updateColumn = useCallback((columnId: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    setBoard((prev) => ({
+      ...prev,
+      columns: prev.columns.map((c) => (c.id === columnId ? { ...c, title: trimmed } : c)),
+    }));
+  }, []);
+
   const deleteColumn = useCallback((columnId: string) => {
     setBoard((prev) => {
       if (prev.columns.length <= 1) return prev;
@@ -164,6 +173,7 @@ export function useBoard() {
     deleteTask,
     moveTask,
     addColumn,
+    updateColumn,
     deleteColumn,
     reorderColumns,
     resetBoard,
