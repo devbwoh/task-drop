@@ -17,6 +17,7 @@ import type { NewTaskInput } from './hooks/useBoard';
 import { Column } from './components/Column';
 import { TaskCard } from './components/TaskCard';
 import { TaskModal } from './components/TaskModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
 
 interface ModalState {
   open: boolean;
@@ -48,6 +49,10 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+  const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null);
+  const [blockedDeleteColumn, setBlockedDeleteColumn] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -150,6 +155,18 @@ export default function App() {
     setModal({ open: true, mode: 'edit', task });
   }
 
+  function requestDeleteTask(taskId: string) {
+    setDeleteTaskId(taskId);
+  }
+
+  function requestDeleteColumn(columnId: string) {
+    if (board.columns.length <= 1) {
+      setBlockedDeleteColumn(true);
+      return;
+    }
+    setDeleteColumnId(columnId);
+  }
+
   function handleSubmit(input: NewTaskInput) {
     if (modal.mode === 'create' && modal.columnId) {
       addTask(modal.columnId, input);
@@ -170,7 +187,7 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 text-slate-900">
       {/* Header */}
-      <header className="shrink-0 border-b border-slate-200/70 bg-white/70 backdrop-blur-md">
+      <header className="relative z-40 shrink-0 border-b border-slate-200/70 bg-white/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-200">
@@ -189,17 +206,91 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={resetBoard}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-            <span className="hidden sm:inline">Reset board</span>
-          </button>
+          <div className="flex items-center gap-2.5">
+            {/* Reset board — low-frequency, demoted to a subtle icon button */}
+            <button
+              type="button"
+              onClick={() => setConfirmReset(true)}
+              aria-label="Reset board"
+              title="Reset board"
+              className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:scale-[0.98]"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+
+            {/* Add Column — primary, high-frequency action */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAddingColumn((v) => !v)}
+                aria-expanded={addingColumn}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-md transition-all active:scale-[0.98] ${
+                  addingColumn
+                    ? 'bg-indigo-700 text-white shadow-indigo-300'
+                    : 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-indigo-200 hover:from-indigo-600 hover:to-violet-700'
+                }`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add Column
+              </button>
+
+              {addingColumn && (
+                <>
+                  {/* Click-away backdrop */}
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => {
+                      setAddingColumn(false);
+                      setNewColTitle('');
+                    }}
+                  />
+                  <div className="absolute right-0 top-full z-40 mt-2 w-[280px] rounded-2xl border border-slate-200/70 bg-white p-3 shadow-xl">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newColTitle}
+                      onChange={(e) => setNewColTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddColumn();
+                        if (e.key === 'Escape') {
+                          setAddingColumn(false);
+                          setNewColTitle('');
+                        }
+                      }}
+                      placeholder="Column name…"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm outline-none ring-indigo-200 transition focus:ring-2"
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddColumn}
+                        disabled={!newColTitle.trim()}
+                        className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingColumn(false);
+                          setNewColTitle('');
+                        }}
+                        className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-50 active:scale-[0.98]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -221,64 +312,11 @@ export default function App() {
                   column={col}
                   tasks={board.tasksByColumn[col.id] ?? []}
                   onEdit={openEdit}
-                  onDelete={deleteTask}
+                  onDelete={requestDeleteTask}
                   onAddClick={() => openCreate(col.id)}
-                  onDeleteColumn={deleteColumn}
+                  onDeleteColumn={requestDeleteColumn}
                 />
               ))}
-
-              {/* Add Column */}
-              {addingColumn ? (
-                <div className="flex w-[280px] shrink-0 flex-col gap-2">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newColTitle}
-                    onChange={(e) => setNewColTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleAddColumn();
-                      if (e.key === 'Escape') {
-                        setAddingColumn(false);
-                        setNewColTitle('');
-                      }
-                    }}
-                    placeholder="Column name…"
-                    className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm outline-none ring-indigo-200 transition focus:ring-2"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleAddColumn}
-                      disabled={!newColTitle.trim()}
-                      className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddingColumn(false);
-                        setNewColTitle('');
-                      }}
-                      className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAddingColumn(true)}
-                  className="flex w-[280px] shrink-0 items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-400 transition-colors hover:border-indigo-300 hover:bg-indigo-50/30 hover:text-indigo-600"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  Add Column
-                </button>
-              )}
             </div>
           </SortableContext>
 
@@ -303,6 +341,57 @@ export default function App() {
         task={modal.task}
         onClose={() => setModal({ open: false, mode: 'create' })}
         onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset board?"
+        message="This clears all columns and tasks and restores the default layout. This can't be undone."
+        confirmLabel="Reset board"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          resetBoard();
+          setConfirmReset(false);
+        }}
+        onCancel={() => setConfirmReset(false)}
+      />
+
+      <ConfirmDialog
+        open={deleteTaskId !== null}
+        title="Delete task?"
+        message={`"${allTasks.get(deleteTaskId ?? '')?.title ?? 'This task'}" will be permanently removed.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          if (deleteTaskId) deleteTask(deleteTaskId);
+          setDeleteTaskId(null);
+        }}
+        onCancel={() => setDeleteTaskId(null)}
+      />
+
+      <ConfirmDialog
+        open={deleteColumnId !== null}
+        title="Delete column?"
+        message={`"${board.columns.find((c) => c.id === deleteColumnId)?.title ?? 'This column'}" and its ${
+          (deleteColumnId ? board.tasksByColumn[deleteColumnId]?.length : 0) ?? 0
+        } task(s) will be permanently removed.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          if (deleteColumnId) deleteColumn(deleteColumnId);
+          setDeleteColumnId(null);
+        }}
+        onCancel={() => setDeleteColumnId(null)}
+      />
+
+      <ConfirmDialog
+        open={blockedDeleteColumn}
+        tone="info"
+        title="Can't delete this column"
+        message="A board needs at least one column, so the last remaining column can't be deleted."
+        confirmLabel="Got it"
+        onConfirm={() => setBlockedDeleteColumn(false)}
+        onCancel={() => setBlockedDeleteColumn(false)}
       />
     </div>
   );
