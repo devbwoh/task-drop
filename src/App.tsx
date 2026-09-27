@@ -202,12 +202,7 @@ export default function App() {
       <header className="relative z-40 shrink-0 border-b border-slate-200/70 bg-white/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-200">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-                <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                <rect x="14" y="3" width="7" height="11" rx="1.5" />
-              </svg>
-            </div>
+            <img src="/favicon.svg" alt="Flowboard logo" className="h-9 w-9 rounded-xl shadow-md shadow-indigo-200" />
             <div>
               <h1 className="text-base font-bold leading-tight tracking-tight text-slate-800">
                 Flowboard
