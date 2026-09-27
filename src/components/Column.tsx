@@ -13,9 +13,10 @@ interface ColumnProps {
   onAddClick: () => void;
   onRenameColumn: (columnId: string, title: string) => void;
   onDeleteColumn: (columnId: string) => void;
+  emptyMessage?: string;
 }
 
-export function Column({ column, tasks, onEdit, onDelete, onAddClick, onRenameColumn, onDeleteColumn }: ColumnProps) {
+export function Column({ column, tasks, onEdit, onDelete, onAddClick, onRenameColumn, onDeleteColumn, emptyMessage = 'Drop tasks here' }: ColumnProps) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({
     id: column.id,
     data: { type: 'column' },
@@ -154,7 +155,7 @@ export function Column({ column, tasks, onEdit, onDelete, onAddClick, onRenameCo
 
           {tasks.length === 0 && (
             <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-8 text-xs font-medium text-slate-400">
-              Drop tasks here
+              {emptyMessage}
             </div>
           )}
         </div>

@@ -53,6 +53,7 @@ export default function App() {
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null);
   const [blockedDeleteColumn, setBlockedDeleteColumn] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -184,6 +185,17 @@ export default function App() {
 
   const totalTasks = board.columns.reduce((n, c) => n + (board.tasksByColumn[c.id]?.length ?? 0), 0);
 
+  // Card search: case-insensitive match against title and description.
+  const query = searchQuery.trim().toLowerCase();
+  function matchesQuery(task: Task): boolean {
+    if (!query) return true;
+    return task.title.toLowerCase().includes(query) || task.description.toLowerCase().includes(query);
+  }
+  const totalMatches = board.columns.reduce(
+    (n, c) => n + (board.tasksByColumn[c.id] ?? []).filter(matchesQuery).length,
+    0,
+  );
+
   return (
     <div className="flex h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 text-slate-900">
       {/* Header */}
@@ -207,6 +219,49 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2.5">
+            {/* Card search filter */}
+            <div className="relative hidden sm:block">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.5" y2="16.5" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search cards…"
+                aria-label="Search cards"
+                className="w-40 rounded-xl border border-slate-200 bg-white/80 py-2 pl-9 pr-16 text-sm text-slate-700 shadow-sm outline-none transition focus:w-56 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 lg:w-48"
+              />
+              {searchQuery && (
+                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                  <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">
+                    {totalMatches}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                    className="rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Reset board — low-frequency, demoted to a subtle icon button */}
             <button
               type="button"
@@ -306,18 +361,22 @@ export default function App() {
         >
           <SortableContext items={board.columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
             <div className="mx-auto flex h-full max-w-[1600px] gap-5 px-5 py-6 sm:px-8">
-              {board.columns.map((col) => (
-                <Column
-                  key={col.id}
-                  column={col}
-                  tasks={board.tasksByColumn[col.id] ?? []}
-                  onEdit={openEdit}
-                  onDelete={requestDeleteTask}
-                  onAddClick={() => openCreate(col.id)}
-                  onRenameColumn={updateColumn}
-                  onDeleteColumn={requestDeleteColumn}
-                />
-              ))}
+              {board.columns.map((col) => {
+                const colTasks = (board.tasksByColumn[col.id] ?? []).filter(matchesQuery);
+                return (
+                  <Column
+                    key={col.id}
+                    column={col}
+                    tasks={colTasks}
+                    emptyMessage={query ? 'No matching cards' : undefined}
+                    onEdit={openEdit}
+                    onDelete={requestDeleteTask}
+                    onAddClick={() => openCreate(col.id)}
+                    onRenameColumn={updateColumn}
+                    onDeleteColumn={requestDeleteColumn}
+                  />
+                );
+              })}
             </div>
           </SortableContext>
 
